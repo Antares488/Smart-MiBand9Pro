@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>ЧСС</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html,body{margin:0;height:100%;background:transparent;color:#e8f0f2;
+            font-family:"Segoe UI",system-ui,sans-serif;overflow:hidden}
+  #wrap{height:100%;display:flex;flex-direction:column}
+  #top{display:flex;flex-direction:column;align-items:center;
+       padding:4px 10px 0;gap:0}
+  #row{display:flex;align-items:baseline;gap:12px}
+  #hr{font-size:clamp(70px,16vw,150px);font-weight:700;line-height:1;letter-spacing:-.03em;
+      animation:pulse 1s ease-in-out infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}12%{transform:scale(1.045)}}
+  #bpm{color:#5a6a72;font-size:20px}
+  #st{color:#5a6a72;font-size:13px}
+  #ecg{flex:1;width:100%;display:block;margin-top:0}
+</style>
+<base target="_blank">
+</head>
+<body>
+<div id="wrap">
+  <div id="top">
+    <div id="row"><div id="hr">--</div><div id="bpm">уд/мин</div></div>
+    <div id="st">подключаюсь…</div>
+  </div>
+  <canvas id="ecg"></canvas>
+</div>
+<script>
+const zones=[[0,100,"#4ade80"],[100,130,"#e8f0f2"],[130,160,"#fbbf24"],[160,999,"#f87171"]];
+const col=h=>{for(const[lo,hi,c]of zones)if(h>=lo&&h<hi)return c;return "#e8f0f2"};
+
+let bpm=0;
+const hrEl=document.getElementById("hr"), stEl=document.getElementById("st");
+
+// --- форма ЭКГ: значение [-1..1] в момент t (сек) от пика R (t=0) ---
+function shape(t){
+  const g=(c,w,a)=>a*Math.exp(-((t-c)*(t-c))/(2*w*w));
+  return g(-0.17,0.035,0.18)   // зубец P
+       - g(-0.030,0.012,0.10)  // Q
+       + g(0.0,   0.010,1.00)  // R
+       - g(0.030, 0.012,0.25)  // S
+       + g(0.19,  0.060,0.28); // T
+}
+
+const cv=document.getElementById("ecg"), ctx=cv.getContext("2d");
+function resize(){cv.width=cv.clientWidth*devicePixelRatio;cv.height=cv.clientHeight*devicePixelRatio;
+  ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);}
+addEventListener("resize",resize);resize();
+
+const SPEED=150; // скорость ленты, пикс/сек
+function draw(){
+  const W=cv.clientWidth,H=cv.clientHeight;
+  const mid=Math.min(H*0.30, 70);      // базовая линия прижата к верху canvas
+  const amp=Math.min(H*0.28, 90);      // амплитуда ограничена, чтобы не обрезалась
+  const now=performance.now()/1000;
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle="rgba(255,255,255,.05)";ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  ctx.beginPath();
+  ctx.strokeStyle=col(bpm||100);ctx.lineWidth=2.4;
+  ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=10;
+  for(let x=0;x<=W;x+=2){
+    const ts=now-x/SPEED;
+    let y=Math.sin(ts*7)*0.015;
+    if(bpm>0){
+      const iv=60/bpm;
+      let p=ts%iv; if(p>iv/2)p-=iv;
+      y+=shape(p);
+    }
+    const py=mid-y*amp;
+    x===0?ctx.moveTo(x,py):ctx.lineTo(x,py);
+  }
+  ctx.stroke();
+  requestAnimationFrame(draw);
+}
+requestAnimationFrame(draw);
+
+async function tick(){
+  try{
+    const r=await fetch("/state",{cache:"no-store"});
+    const st=await r.json();
+    if(!st.connected){bpm=0;hrEl.textContent="--";hrEl.style.color="#5a6a72";
+      stEl.textContent="браслет не подключён";document.title="ЧСС: --";}
+    else{
+      const cur=st.stats&&st.stats.hr_cur;
+      if(cur){bpm=cur;hrEl.textContent=cur;hrEl.style.color=col(cur);
+        hrEl.style.animationDuration=(60/cur)+"s";
+        stEl.textContent=(st.on_wrist?"на руке":"не на руке")+" · заряд "
+          +(st.battery?st.battery.level:"?")+"%";
+        document.title="\u2764 "+cur;}
+      else{bpm=0;hrEl.textContent="--";hrEl.style.color="#5a6a72";
+        stEl.textContent="жду измерение…";document.title="ЧСС: --";}
+    }
+  }catch(e){bpm=0;hrEl.textContent="--";hrEl.style.color="#5a6a72";
+    stEl.textContent="сервис недоступен (127.0.0.1:8765)";document.title="ЧСС: --";}
+  setTimeout(tick,1000);
+}
+tick();
+</script>
+</body>
+</html>
