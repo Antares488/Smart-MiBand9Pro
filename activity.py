@@ -425,6 +425,17 @@ class ActivityFetcher:
     def busy(self):
         return self.fetching
 
+    def begin(self):
+        if self.fetching:
+            return False
+        self.queue = []
+        self.buf = bytearray()
+        self.current = None
+        self.fetching = True
+        self.awaiting_past = True
+        self.idle_hold = True
+        return True
+
     def handle_file_ids(self, subtype, ids_bytes):
         """subtype 1 = today response, 2 = past response."""
         if not ids_bytes or (len(ids_bytes) % 7) != 0:

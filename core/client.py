@@ -281,7 +281,7 @@ class LiveClient:
 
     # ---------- health history / sync ----------
     def start_sync(self):
-        if self.fetcher.busy():
+        if not self.fetcher.begin():
             return
         self.synced_days = 0
         self.last_sync = time.time()

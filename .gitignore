@@ -45,3 +45,5 @@ dist/
 desktop-service.log
 .desktop-stop
 .watch_reminders.json
+/fix-sync-start.patch
+/SmartMiBand-windows.patch
