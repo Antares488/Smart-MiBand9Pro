@@ -15,7 +15,8 @@ from core import router
 from core import watch_io
 from core.state import S, _lock, _SESS_FILE, _save_sleep_session  # noqa: F401
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+from app_paths import resource_dir, data_dir
+HERE = str(resource_dir())
 MAX_HR = 190
 MODE = "live"
 DEVICE = {"model": "Redmi Watch 5 Active", "mac": "", "port": ""}
@@ -34,7 +35,7 @@ def configure(max_hr=190, device=None, db_path=None, mode="live"):
     MODE = mode or "live"
     if device:
         DEVICE.update(device)
-    db_path = db_path or os.path.join(HERE, "history.db")
+    db_path = db_path or str(data_dir() / "history.db")
     try:
         store.init(db_path)
         store.prune()          # raw samples 14d, minutes 90d; aggregates forever

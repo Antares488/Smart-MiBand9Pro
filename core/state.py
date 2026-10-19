@@ -4,6 +4,7 @@ Single source of truth: S holds all live data; _lock guards every mutation.
 dashboard.py re-exports S, _lock, _save_sleep_session so existing callers keep
 working without changes during the migration to vertical feature slices.
 """
+from app_paths import data_dir
 import json
 import os
 import threading
@@ -11,10 +12,7 @@ from collections import deque
 
 _lock = threading.Lock()
 
-_SESS_FILE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    ".sleep_session.json"
-)
+_SESS_FILE = str(data_dir() / ".sleep_session.json")
 
 S = {
     "session_start": None, "count": 0, "last_ts": 0, "last_hr_ts": 0,

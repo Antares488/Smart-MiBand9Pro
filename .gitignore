@@ -37,3 +37,11 @@ CLAUDE.md
 # Claude Code tool integration (local only)
 dev.bat
 watch_notify_hook.py
+
+# desktop build and runtime
+.venv-build/
+build/
+dist/
+desktop-service.log
+.desktop-stop
+.watch_reminders.json

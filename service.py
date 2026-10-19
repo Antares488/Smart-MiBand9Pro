@@ -20,7 +20,8 @@ import features.todos.routes  # noqa: F401 — registers /todos routes
 
 import re
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+from app_paths import data_dir
+HERE = str(data_dir())
 
 # ---- logging FIRST, so even config errors are visible under pythonw ----
 _logger = logging.getLogger("rwlive")
@@ -277,9 +278,30 @@ def _health_monitor():
 import threading as _thr
 _thr.Thread(target=_health_monitor, daemon=True).start()
 
+# Desktop asks for graceful exit; a stuck Windows serial driver is handled
+# by the parent's bounded terminate fallback.
+_desktop_stop = _threading.Event()
+
+def _desktop_stop_monitor():
+    path = os.environ.get("SMARTMIBAND_STOP_FILE")
+    if not path:
+        return
+    while True:
+        time.sleep(0.25)
+        if os.path.exists(path):
+            _desktop_stop.set()
+            current = globals().get("cl")
+            if current is not None:
+                try:
+                    current.close()
+                except Exception:
+                    pass
+
+_threading.Thread(target=_desktop_stop_monitor, daemon=True).start()
+
 log("service mode = %s (interval=%ds)" % (MODE, SYNC_INTERVAL))
 
-while True:
+while not _desktop_stop.is_set():
     try:
         com = _resolve_com(COM)
         log("connecting to watch on %s ..." % com)
@@ -306,7 +328,8 @@ while True:
                 time.sleep(1)
         threading.Thread(target=_watcher, daemon=True).start()
         try:
-            cl.run()
+            if not _desktop_stop.is_set():
+                cl.run()
         finally:
             stop.set()
     except Exception as e:
@@ -316,15 +339,19 @@ while True:
         if LIVE:
             _notify("Часы отключены", "Связь потеряна — переподключение…")
     if LIVE:
-        time.sleep(8)                # live mode: reconnect quickly
+        _desktop_stop.wait(8)        # interruptible reconnect delay
     else:
         # sync-only: channel is now free for the phone; wait for the next cycle,
         # but break early if the UI requests a manual sync
         log("sync-only: sleeping %ds (channel free for phone)" % SYNC_INTERVAL)
         waited = 0
-        while waited < SYNC_INTERVAL:
+        while waited < SYNC_INTERVAL and not _desktop_stop.is_set():
             if dashboard.take_sync_request():
                 log("manual sync requested; reconnecting now")
                 break
             time.sleep(1)
             waited += 1
+
+_httpd.shutdown()
+_httpd.server_close()
+_lock.close()
